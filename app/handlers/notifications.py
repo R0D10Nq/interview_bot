@@ -8,6 +8,7 @@ from app.keyboards.inline import (
     get_notification_settings_keyboard,
     get_cancel_keyboard,
     get_main_menu_keyboard,
+    get_quiet_hours_keyboard,
 )
 from app.services.notification_service import NotificationService
 from app.states.interview_states import NotificationSettingsStates
@@ -38,12 +39,21 @@ async def show_notification_settings(
         "⚙️ <b>Настройки уведомлений</b>\n",
         f"<b>Статус:</b> {status}",
         f"<b>Время уведомлений:</b> {times_text}",
-        "\n<i>Уведомления будут отправляться за указанное время до начала интервью.</i>",
     ]
+    
+    if settings_data["quiet_hours_enabled"]:
+        text.append(
+            f"<b>Тихие часы:</b> {settings_data['quiet_hours_start']} - {settings_data['quiet_hours_end']}"
+        )
+    
+    text.append("\n<i>Уведомления будут отправляться за указанное время до начала интервью.</i>")
     
     await callback.message.edit_text(
         "\n".join(text),
-        reply_markup=get_notification_settings_keyboard(settings_data["enabled"]),
+        reply_markup=get_notification_settings_keyboard(
+            settings_data["enabled"],
+            settings_data["quiet_hours_enabled"]
+        ),
         parse_mode="HTML",
     )
     await callback.answer()
@@ -133,3 +143,115 @@ async def reset_notification_times(
     
     # Refresh settings view
     await show_notification_settings(callback, session, bot)
+
+
+@router.callback_query(F.data == "quiet_hours_settings")
+async def show_quiet_hours_settings(callback: CallbackQuery):
+    """Show quiet hours settings."""
+    await callback.message.edit_text(
+        "🔕 <b>Настройка тихих часов</b>\n\n"
+        "В тихие часы уведомления отправляться не будут.\n"
+        "Это полезно, чтобы не получать уведомления ночью.",
+        reply_markup=get_quiet_hours_keyboard(),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "quiet_hours_enable")
+async def enable_quiet_hours(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    bot,
+):
+    """Enable quiet hours with default time."""
+    service = NotificationService(session, bot)
+    await service.set_quiet_hours(
+        callback.from_user.id,
+        enabled=True,
+        start="22:00",
+        end="08:00",
+    )
+    
+    await callback.answer("✅ Тихие часы включены (22:00 - 08:00)", show_alert=True)
+    await show_notification_settings(callback, session, bot)
+
+
+@router.callback_query(F.data == "quiet_hours_disable")
+async def disable_quiet_hours(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    bot,
+):
+    """Disable quiet hours."""
+    service = NotificationService(session, bot)
+    await service.set_quiet_hours(callback.from_user.id, enabled=False)
+    
+    await callback.answer("✅ Тихие часы выключены", show_alert=True)
+    await show_notification_settings(callback, session, bot)
+
+
+@router.callback_query(F.data == "quiet_hours_set_time")
+async def start_set_quiet_hours_time(
+    callback: CallbackQuery,
+    state: FSMContext,
+):
+    """Start setting quiet hours time."""
+    await state.set_state(NotificationSettingsStates.waiting_for_quiet_hours)
+    
+    await callback.message.edit_text(
+        "🕐 <b>Настройка времени тихих часов</b>\n\n"
+        "Введите время начала и конца через дефис.\n"
+        "Формат: ЧЧ:ММ-ЧЧ:ММ\n\n"
+        "Например: <code>22:00-08:00</code>",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(NotificationSettingsStates.waiting_for_quiet_hours)
+async def process_quiet_hours_time(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    bot,
+):
+    """Process quiet hours time."""
+    try:
+        parts = message.text.strip().split("-")
+        if len(parts) != 2:
+            raise ValidationError("Используйте формат ЧЧ:ММ-ЧЧ:ММ")
+        
+        start = parts[0].strip()
+        end = parts[1].strip()
+        
+        # Validate time format
+        from datetime import time as dt_time
+        dt_time.fromisoformat(start)
+        dt_time.fromisoformat(end)
+        
+        service = NotificationService(session, bot)
+        await service.set_quiet_hours(
+            message.from_user.id,
+            enabled=True,
+            start=start,
+            end=end,
+        )
+        
+        await state.clear()
+        
+        await message.answer(
+            f"✅ <b>Тихие часы настроены!</b>\n\n"
+            f"⏰ С {start} до {end}",
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode="HTML",
+        )
+        
+    except (ValidationError, ValueError) as e:
+        await message.answer(
+            f"❌ Ошибка: Неверный формат времени\n\n"
+            f"Используйте формат: ЧЧ:ММ-ЧЧ:ММ\n"
+            f"Например: 22:00-08:00",
+            reply_markup=get_cancel_keyboard(),
+        )

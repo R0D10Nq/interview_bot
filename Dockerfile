@@ -1,27 +1,29 @@
 FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
+# Set working directory
 WORKDIR /app
 
-ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends tzdata \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
+# Copy application code
+COPY . .
 
-RUN useradd --create-home --shell /usr/sbin/nologin appuser \
-    && mkdir -p /data \
-    && ln -sf /data/interviews.db /app/interviews.db \
-    && chown -R appuser:appuser /app /data
+# Create directories for data
+RUN mkdir -p /app/data /app/backups
 
-USER appuser
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV DATABASE_URL=sqlite+aiosqlite:///./data/interviews.db
+ENV BACKUP_PATH=/app/backups
 
-VOLUME ["/data"]
-
+# Run the bot
 CMD ["python", "-m", "app.main"]

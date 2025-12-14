@@ -22,6 +22,7 @@ wheels/
 
 # Virtual Environment
 venv/
+2venv/
 ENV/
 env/
 
@@ -40,6 +41,7 @@ env/
 *.db
 *.sqlite
 *.sqlite3
+data/
 
 # Logs
 *.log
