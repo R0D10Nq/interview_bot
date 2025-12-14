@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     webhook_enabled: bool = False
     webhook_url: str = ""
     
+    # Web server settings
+    web_server_enabled: bool = True
+    web_server_host: str = "0.0.0.0"
+    web_server_port: int = 8080
+    
     # Locale
     default_locale: str = "ru"
     
