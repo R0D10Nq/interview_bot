@@ -16,7 +16,7 @@
 ### 1. Клонируйте репозиторий
 
 ```bash
-git clone <repo_url>
+git clone https://github.com/R0D10Nq/interview_bot.git
 cd interview_bot
 ```
 

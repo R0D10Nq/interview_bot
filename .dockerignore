@@ -1,0 +1,16 @@
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.log
+.git/
+.history/
+.env
+.env.*
+interviews.db
+*.db
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
